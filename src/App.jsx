@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from '@react-three/fiber'
-import { AdditiveBlending, Color } from 'three'
+import { AdditiveBlending } from 'three'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
@@ -21,9 +21,40 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 const dist2 = (a, b) => Math.hypot((a.x || 0) - (b.x || 0), (a.y || 0) - (b.y || 0))
 
 const toScreen = (lm) => ({
-  x: clamp(1 - lm.x, 0, 1),
+  x: clamp(lm.x, 0, 1),
   y: clamp(lm.y, 0, 1),
 })
+
+const mapToCoverViewport = (point, videoElement) => {
+  if (!videoElement?.videoWidth || !videoElement?.videoHeight) return point
+  const containerW = window.innerWidth || 1
+  const containerH = window.innerHeight || 1
+  const videoAspect = videoElement.videoWidth / videoElement.videoHeight
+  const containerAspect = containerW / containerH
+
+  let renderW
+  let renderH
+  let offsetX = 0
+  let offsetY = 0
+
+  if (containerAspect > videoAspect) {
+    renderW = containerW
+    renderH = containerW / videoAspect
+    offsetY = (renderH - containerH) * 0.5
+  } else {
+    renderH = containerH
+    renderW = containerH * videoAspect
+    offsetX = (renderW - containerW) * 0.5
+  }
+
+  const px = point.x * renderW - offsetX
+  const py = point.y * renderH - offsetY
+
+  return {
+    x: clamp(px / containerW, 0, 1),
+    y: clamp(py / containerH, 0, 1),
+  }
+}
 
 function classifyHand(hand) {
   const wrist = hand[JOINTS.WRIST]
@@ -38,18 +69,29 @@ function classifyHand(hand) {
 }
 
 function Effects3D({ fxState }) {
-  const rasenganRef = useRef(null)
+  const rasenganCoreRef = useRef(null)
+  const rasenganShellRef = useRef(null)
+  const rasenganRingRef = useRef(null)
   const sparkRef = useRef(null)
   const sparkPositions = useMemo(() => new Float32Array(450), [])
 
   useFrame((_, delta) => {
-    if (rasenganRef.current) {
-      rasenganRef.current.rotation.y += delta * (2 + fxState.rasenganPower * 5)
-      rasenganRef.current.rotation.x += delta * 1.2
-      const s = 0.2 + fxState.rasenganPower * 0.35
-      rasenganRef.current.scale.setScalar(s)
-      rasenganRef.current.visible = fxState.rasenganActive
-      rasenganRef.current.position.set(fxState.rasenganPos.x, fxState.rasenganPos.y, 0.2)
+    if (rasenganCoreRef.current && rasenganShellRef.current && rasenganRingRef.current) {
+      const spin = 2 + fxState.rasenganPower * 9
+      rasenganCoreRef.current.rotation.y += delta * spin
+      rasenganCoreRef.current.rotation.x += delta * 1.8
+      rasenganShellRef.current.rotation.z -= delta * (spin * 0.8)
+      rasenganRingRef.current.rotation.y += delta * (spin * 1.2)
+      const s = 0.22 + fxState.rasenganPower * 0.4
+      rasenganCoreRef.current.scale.setScalar(s)
+      rasenganShellRef.current.scale.setScalar(s * 1.28)
+      rasenganRingRef.current.scale.setScalar(s * 1.72)
+      rasenganCoreRef.current.visible = fxState.rasenganActive
+      rasenganShellRef.current.visible = fxState.rasenganActive
+      rasenganRingRef.current.visible = fxState.rasenganActive
+      rasenganCoreRef.current.position.set(fxState.rasenganPos.x, fxState.rasenganPos.y, 0.2)
+      rasenganShellRef.current.position.set(fxState.rasenganPos.x, fxState.rasenganPos.y, 0.2)
+      rasenganRingRef.current.position.set(fxState.rasenganPos.x, fxState.rasenganPos.y, 0.2)
     }
     if (sparkRef.current) {
       for (let i = 0; i < sparkPositions.length; i += 3) {
@@ -66,11 +108,19 @@ function Effects3D({ fxState }) {
 
   return (
     <>
-      <ambientLight intensity={0.6} />
+      <ambientLight intensity={0.5} />
       <pointLight color="#90d6ff" position={[0, 0, 2]} intensity={3} />
-      <mesh ref={rasenganRef}>
-        <sphereGeometry args={[0.45, 32, 32]} />
-        <meshStandardMaterial color="#3eb3ff" emissive="#51d8ff" emissiveIntensity={2} transparent opacity={0.85} />
+      <mesh ref={rasenganCoreRef}>
+        <icosahedronGeometry args={[0.46, 3]} />
+        <meshStandardMaterial color="#93ecff" emissive="#bbf7ff" emissiveIntensity={2.7} transparent opacity={0.96} />
+      </mesh>
+      <mesh ref={rasenganShellRef}>
+        <sphereGeometry args={[0.62, 26, 26]} />
+        <meshBasicMaterial color="#90f0ff" transparent opacity={0.23} blending={AdditiveBlending} />
+      </mesh>
+      <mesh ref={rasenganRingRef}>
+        <torusGeometry args={[0.58, 0.06, 24, 72]} />
+        <meshBasicMaterial color="#c8fbff" transparent opacity={0.58} blending={AdditiveBlending} />
       </mesh>
       <points ref={sparkRef}>
         <bufferGeometry>
@@ -92,18 +142,39 @@ function App() {
   const [error, setError] = useState('')
   const [landmarks, setLandmarks] = useState([])
   const [shake, setShake] = useState(0)
+  const [voidFlash, setVoidFlash] = useState(0)
   const [invertVoid, setInvertVoid] = useState(0)
   const [nebula, setNebula] = useState(0)
   const [fxState, setFxState] = useState({
     rasenganActive: false,
     rasenganPower: 0,
     rasenganPos: { x: 0, y: 0 },
+    rasenganUi: { x: 50, y: 50 },
   })
   const [ghost, setGhost] = useState({ visible: false, x: 0.5, y: 0.45, vx: 0.003, vy: -0.002, angle: 0 })
   const [blood, setBlood] = useState({ visible: false, x: 0.5, y: 0.5, ttl: 0 })
 
   const vibrate = useCallback((ms = 30) => {
     if (navigator.vibrate) navigator.vibrate(ms)
+  }, [])
+
+  const playVoidBoom = useCallback(() => {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(58, ctx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(34, ctx.currentTime + 0.3)
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.03)
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.31)
+    window.setTimeout(() => ctx.close(), 400)
   }, [])
 
   const fireToast = useCallback((text) => {
@@ -115,11 +186,16 @@ function App() {
 
   const onResults = useCallback((results) => {
     const allHands = results.multiHandLandmarks || []
-    setLandmarks(allHands)
+    const mappedHands = allHands.map((hand) => hand.map((lm) => mapToCoverViewport(toScreen(lm), videoRef.current)))
+    setLandmarks(mappedHands)
     const analyzed = allHands.map((h) => classifyHand(h))
-    const palms = allHands.map((h) => toScreen(h[JOINTS.MIDDLE_MCP]))
+    const palms = mappedHands.map((h) => h[JOINTS.MIDDLE_MCP])
     if (!palms.length) {
       setFxState((prev) => ({ ...prev, rasenganActive: false, rasenganPower: prev.rasenganPower * 0.9 }))
+      setInvertVoid((v) => v * 0.9)
+      setNebula((v) => v * 0.9)
+      prevFrameRef.current.voidActive = false
+      prevFrameRef.current.rasenganActive = false
       return
     }
 
@@ -136,6 +212,7 @@ function App() {
           rasenganActive: oneFist,
           rasenganPower,
           rasenganPos: { x: (focusPalm.x - 0.5) * 2, y: -(focusPalm.y - 0.5) * 2 },
+          rasenganUi: { x: focusPalm.x * 100, y: focusPalm.y * 100 },
         }
       })
 
@@ -148,6 +225,8 @@ function App() {
       }
       if (mudra && !prevFrameRef.current.voidActive) {
         fireToast('🟣 무량공처')
+        setVoidFlash(1)
+        playVoidBoom()
       }
       if (mudra) {
         setInvertVoid(1)
@@ -167,7 +246,7 @@ function App() {
     const sidePose = analyzed.some((h) => h.sidePose)
     const fists = analyzed.length >= 2 && analyzed[0].fist && analyzed[1].fist
     const openHands = analyzed.length >= 2 && !analyzed[0].fist && !analyzed[1].fist
-    const fingertips = allHands.flatMap((h) => [h[JOINTS.THUMB_TIP], h[JOINTS.INDEX_TIP], h[JOINTS.MIDDLE_TIP], h[JOINTS.RING_TIP], h[JOINTS.PINKY_TIP]].map(toScreen))
+    const fingertips = mappedHands.flatMap((h) => [h[JOINTS.THUMB_TIP], h[JOINTS.INDEX_TIP], h[JOINTS.MIDDLE_TIP], h[JOINTS.RING_TIP], h[JOINTS.PINKY_TIP]])
 
     setGhost((prev) => ({ ...prev, visible: sidePose || prev.visible }))
     setGhost((prev) => {
@@ -200,7 +279,7 @@ function App() {
       vibrate(40)
     }
     prevFrameRef.current.allFists = fists
-  }, [blood.visible, mode, vibrate, fireToast])
+  }, [blood.visible, mode, vibrate, fireToast, playVoidBoom])
 
   useEffect(() => {
     let hand
@@ -322,6 +401,7 @@ function App() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       setShake((v) => v * 0.83)
+      setVoidFlash((v) => v * 0.82)
       setBlood((b) => (b.visible ? { ...b, ttl: b.ttl - 1, visible: b.ttl > 0 } : b))
     }, 16)
     return () => window.clearInterval(timer)
@@ -330,7 +410,7 @@ function App() {
   const handPoints = useMemo(
     () =>
       landmarks.flatMap((hand) =>
-        [JOINTS.THUMB_TIP, JOINTS.INDEX_TIP, JOINTS.MIDDLE_TIP, JOINTS.RING_TIP, JOINTS.PINKY_TIP].map((id) => toScreen(hand[id])),
+        [JOINTS.THUMB_TIP, JOINTS.INDEX_TIP, JOINTS.MIDDLE_TIP, JOINTS.RING_TIP, JOINTS.PINKY_TIP].map((id) => hand[id]),
       ),
     [landmarks],
   )
@@ -353,7 +433,6 @@ function App() {
     <main className={`app mode-${mode}`} style={shakeStyle}>
       <video ref={videoRef} className="camera" playsInline muted autoPlay />
       <Canvas className="vfx-layer" camera={{ position: [0, 0, 2.4], fov: 54 }}>
-        <color attach="background" args={[new Color(0x000000)]} />
         <Effects3D fxState={fxState} />
       </Canvas>
 
@@ -391,8 +470,22 @@ function App() {
 
       {mode === MODE_TECH ? (
         <>
+          <div
+            className="rasengan-aura"
+            style={{
+              opacity: fxState.rasenganActive ? 0.35 + fxState.rasenganPower * 0.45 : 0,
+              left: `${fxState.rasenganUi.x}%`,
+              top: `${fxState.rasenganUi.y}%`,
+              transform: `translate(-50%, -50%) scale(${0.7 + fxState.rasenganPower * 0.9})`,
+            }}
+          />
+          <div className="void-realm" style={{ opacity: invertVoid * 0.86 }} />
+          <div className="void-black-flash" style={{ opacity: voidFlash }} />
           <div className="void-filter" style={{ opacity: invertVoid }} />
           <div className="nebula" style={{ opacity: nebula }} />
+          <div className="void-streaks" style={{ opacity: nebula }} />
+          <div className="void-stars" style={{ opacity: nebula * 0.75 }} />
+          <div className="void-vignette" style={{ opacity: invertVoid * 0.95 }} />
         </>
       ) : null}
 

@@ -40,7 +40,13 @@
 .flash,
 .void-filter,
 .nebula,
-.distort {
+.distort,
+.void-stars,
+.void-vignette,
+.rasengan-aura,
+.void-realm,
+.void-streaks,
+.void-black-flash {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -57,17 +63,60 @@
 
 .nebula {
   background:
-    radial-gradient(circle at 18% 30%, rgba(174, 90, 255, 0.35), transparent 44%),
-    radial-gradient(circle at 85% 72%, rgba(102, 22, 255, 0.4), transparent 45%),
-    radial-gradient(circle at 50% 50%, rgba(148, 0, 255, 0.24), transparent 60%);
+    radial-gradient(circle at 18% 30%, rgba(173, 98, 255, 0.26), transparent 44%),
+    radial-gradient(circle at 85% 72%, rgba(90, 28, 223, 0.34), transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(125, 40, 189, 0.2), transparent 60%);
+  mix-blend-mode: plus-lighter;
+  animation: nebula-flow 1.8s linear infinite;
+}
+
+.void-realm {
+  background: radial-gradient(circle at center, rgba(8, 0, 17, 0.2), rgba(0, 0, 0, 0.85) 76%);
+}
+
+.void-black-flash {
+  background: radial-gradient(circle at center, rgba(20, 0, 40, 0.25), rgba(0, 0, 0, 1) 70%);
+  transition: opacity 0.05s linear;
+}
+
+.void-streaks {
+  background:
+    repeating-linear-gradient(120deg, rgba(154, 119, 255, 0.2) 0 2px, transparent 2px 42px),
+    repeating-linear-gradient(60deg, rgba(130, 76, 255, 0.17) 0 1px, transparent 1px 36px);
   mix-blend-mode: screen;
-  animation: nebula-flow 2.2s linear infinite;
+  animation: streak-rush 0.9s linear infinite;
 }
 
 .distort {
   background:
     radial-gradient(circle at var(--cx) var(--cy), rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.3) 35%, transparent 64%);
   backdrop-filter: blur(2px) contrast(1.22);
+}
+
+.void-stars {
+  background-image:
+    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.9) 0 1px, transparent 2px),
+    radial-gradient(circle at 72% 28%, rgba(222, 194, 255, 0.9) 0 1px, transparent 2px),
+    radial-gradient(circle at 36% 78%, rgba(255, 255, 255, 0.9) 0 1px, transparent 2px),
+    radial-gradient(circle at 82% 64%, rgba(219, 173, 255, 0.8) 0 1px, transparent 2px);
+  background-size: 320px 320px;
+  mix-blend-mode: screen;
+  animation: star-drift 8s linear infinite;
+}
+
+.void-vignette {
+  background: radial-gradient(circle at center, transparent 30%, rgba(5, 0, 16, 0.74) 100%);
+}
+
+.rasengan-aura {
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(163, 245, 255, 0.72) 0%, rgba(78, 195, 255, 0.35) 42%, rgba(0, 0, 0, 0) 74%);
+  mix-blend-mode: screen;
+  filter: blur(8px);
+  inset: auto;
 }
 
 .toast {
@@ -144,4 +193,14 @@
   0% { transform: scale(1) rotate(0deg); }
   50% { transform: scale(1.08) rotate(3deg); }
   100% { transform: scale(1) rotate(0deg); }
+}
+
+@keyframes star-drift {
+  from { transform: translateY(0); }
+  to { transform: translateY(-40px); }
+}
+
+@keyframes streak-rush {
+  from { transform: scale(1) translateY(0); }
+  to { transform: scale(1.12) translateY(-14px); }
 }
