@@ -39,8 +39,6 @@ function classifyHand(hand) {
 
 function Effects3D({ fxState }) {
   const rasenganRef = useRef(null)
-  const beamRef = useRef(null)
-  const blackHoleRef = useRef(null)
   const sparkRef = useRef(null)
   const sparkPositions = useMemo(() => new Float32Array(450), [])
 
@@ -52,19 +50,6 @@ function Effects3D({ fxState }) {
       rasenganRef.current.scale.setScalar(s)
       rasenganRef.current.visible = fxState.rasenganActive
       rasenganRef.current.position.set(fxState.rasenganPos.x, fxState.rasenganPos.y, 0.2)
-    }
-    if (beamRef.current) {
-      beamRef.current.visible = fxState.kameFire > 0.01
-      beamRef.current.scale.z = 0.5 + fxState.kameFire * 5
-      beamRef.current.scale.x = 0.4 + fxState.kameCharge * 0.4
-      beamRef.current.scale.y = 0.4 + fxState.kameCharge * 0.4
-      beamRef.current.position.set(0, 0, -0.5)
-    }
-    if (blackHoleRef.current) {
-      blackHoleRef.current.visible = fxState.windTunnel > 0.01
-      blackHoleRef.current.rotation.z += delta * (0.4 + fxState.windTunnel * 4)
-      blackHoleRef.current.scale.setScalar(0.5 + fxState.windTunnel * 1.4)
-      blackHoleRef.current.position.set(fxState.windPos.x, fxState.windPos.y, 0.25)
     }
     if (sparkRef.current) {
       for (let i = 0; i < sparkPositions.length; i += 3) {
@@ -93,14 +78,6 @@ function Effects3D({ fxState }) {
         </bufferGeometry>
         <pointsMaterial color="#9de9ff" size={0.045} transparent opacity={0.9} blending={AdditiveBlending} />
       </points>
-      <mesh ref={beamRef}>
-        <cylinderGeometry args={[0.12, 0.22, 2.5, 24, 1, true]} />
-        <meshBasicMaterial color="#9de9ff" transparent opacity={0.8} blending={AdditiveBlending} />
-      </mesh>
-      <mesh ref={blackHoleRef}>
-        <torusGeometry args={[0.45, 0.18, 32, 64]} />
-        <meshStandardMaterial color="#13001f" emissive="#2b0059" emissiveIntensity={1.4} />
-      </mesh>
     </>
   )
 }
@@ -109,24 +86,18 @@ function App() {
   const videoRef = useRef(null)
   const handsRef = useRef(null)
   const rafRef = useRef(null)
-  const prevFrameRef = useRef({ allFists: false, kameCharge: false, lastPalm: { x: 0.5, y: 0.5 } })
+  const prevFrameRef = useRef({ allFists: false, rasenganActive: false, voidActive: false })
   const [mode, setMode] = useState(MODE_TECH)
   const [toast, setToast] = useState('🔥 기술 모드')
   const [error, setError] = useState('')
   const [landmarks, setLandmarks] = useState([])
-  const [flash, setFlash] = useState(0)
   const [shake, setShake] = useState(0)
   const [invertVoid, setInvertVoid] = useState(0)
   const [nebula, setNebula] = useState(0)
-  const [distort, setDistort] = useState(0)
   const [fxState, setFxState] = useState({
     rasenganActive: false,
     rasenganPower: 0,
     rasenganPos: { x: 0, y: 0 },
-    windTunnel: 0,
-    windPos: { x: 0, y: 0 },
-    kameCharge: 0,
-    kameFire: 0,
   })
   const [ghost, setGhost] = useState({ visible: false, x: 0.5, y: 0.45, vx: 0.003, vy: -0.002, angle: 0 })
   const [blood, setBlood] = useState({ visible: false, x: 0.5, y: 0.5, ttl: 0 })
@@ -148,7 +119,7 @@ function App() {
     const analyzed = allHands.map((h) => classifyHand(h))
     const palms = allHands.map((h) => toScreen(h[JOINTS.MIDDLE_MCP]))
     if (!palms.length) {
-      setFxState((prev) => ({ ...prev, rasenganActive: false, rasenganPower: prev.rasenganPower * 0.9, kameCharge: prev.kameCharge * 0.9, kameFire: prev.kameFire * 0.82, windTunnel: prev.windTunnel * 0.9 }))
+      setFxState((prev) => ({ ...prev, rasenganActive: false, rasenganPower: prev.rasenganPower * 0.9 }))
       return
     }
 
@@ -157,30 +128,26 @@ function App() {
       const bothHands = analyzed.length >= 2
       const allFists = bothHands && analyzed[0].fist && analyzed[1].fist
       const mudra = bothHands && !analyzed[0].fist && !analyzed[1].fist && dist2(palms[0], palms[1]) < 0.16
-      const palmsClose = bothHands && dist2(palms[0], palms[1]) < 0.13
-      const palmsFar = bothHands && dist2(palms[0], palms[1]) > 0.34
-      const palmFront = analyzed.some((h) => h.palmFacing && !h.fist)
       const focusPalm = palms[0]
 
       setFxState((prev) => {
         const rasenganPower = oneFist ? clamp(prev.rasenganPower + 0.05, 0, 1) : clamp(prev.rasenganPower - 0.05, 0, 1)
-        const kameCharge = palmsClose ? clamp(prev.kameCharge + 0.06, 0, 1) : clamp(prev.kameCharge - 0.05, 0, 1)
-        const fireNow = prevFrameRef.current.kameCharge && palmsFar && prev.kameCharge > 0.45
-        const kameFire = fireNow ? 1 : clamp(prev.kameFire - 0.08, 0, 1)
-        const windTunnel = palmFront ? clamp(prev.windTunnel + 0.07, 0, 1) : clamp(prev.windTunnel - 0.07, 0, 1)
         return {
           rasenganActive: oneFist,
           rasenganPower,
           rasenganPos: { x: (focusPalm.x - 0.5) * 2, y: -(focusPalm.y - 0.5) * 2 },
-          windTunnel,
-          windPos: { x: (focusPalm.x - 0.5) * 2, y: -(focusPalm.y - 0.5) * 2 },
-          kameCharge,
-          kameFire,
         }
       })
 
+      if (oneFist && !prevFrameRef.current.rasenganActive) {
+        fireToast('🔵 나선환')
+        vibrate(35)
+      }
       if (oneFist) {
         setShake((v) => clamp(v + 0.14, 0, 1))
+      }
+      if (mudra && !prevFrameRef.current.voidActive) {
+        fireToast('🟣 무량공처')
       }
       if (mudra) {
         setInvertVoid(1)
@@ -191,18 +158,8 @@ function App() {
         setInvertVoid((v) => v * 0.94)
         setNebula((v) => v * 0.95)
       }
-      if (palmFront) {
-        setDistort((v) => clamp(v + 0.06, 0, 1))
-      } else {
-        setDistort((v) => v * 0.92)
-      }
-      if (prevFrameRef.current.kameCharge && palmsFar) {
-        setFlash(1)
-        setShake(1)
-        vibrate(120)
-      }
-      prevFrameRef.current.kameCharge = palmsClose
-      prevFrameRef.current.lastPalm = focusPalm
+      prevFrameRef.current.rasenganActive = oneFist
+      prevFrameRef.current.voidActive = mudra
       prevFrameRef.current.allFists = allFists
       return
     }
@@ -364,7 +321,6 @@ function App() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      setFlash((v) => v * 0.84)
       setShake((v) => v * 0.83)
       setBlood((b) => (b.visible ? { ...b, ttl: b.ttl - 1, visible: b.ttl > 0 } : b))
     }, 16)
@@ -389,7 +345,6 @@ function App() {
   const setModeAndToast = (next) => {
     setMode(next)
     setShake(0)
-    setDistort(0)
     if (next === MODE_TECH) fireToast('🔥 기술 모드')
     if (next === MODE_GHOST) fireToast('👻 유령 모드')
   }
@@ -436,10 +391,8 @@ function App() {
 
       {mode === MODE_TECH ? (
         <>
-          <div className="flash" style={{ opacity: flash }} />
           <div className="void-filter" style={{ opacity: invertVoid }} />
           <div className="nebula" style={{ opacity: nebula }} />
-          <div className="distort" style={{ opacity: distort, '--cx': `${prevFrameRef.current.lastPalm.x * 100}%`, '--cy': `${prevFrameRef.current.lastPalm.y * 100}%` }} />
         </>
       ) : null}
 
