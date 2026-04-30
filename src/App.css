@@ -149,6 +149,11 @@
   filter: drop-shadow(0 0 18px rgba(255, 62, 88, 0.75));
 }
 
+.ghost {
+  mix-blend-mode: screen;
+  filter: brightness(1.18) contrast(1.25) drop-shadow(0 0 20px rgba(147, 255, 239, 0.72));
+}
+
 .error-box {
   position: absolute;
   top: 16px;

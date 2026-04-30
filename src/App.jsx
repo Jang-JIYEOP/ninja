@@ -136,7 +136,7 @@ function App() {
   const videoRef = useRef(null)
   const handsRef = useRef(null)
   const rafRef = useRef(null)
-  const prevFrameRef = useRef({ allFists: false, rasenganActive: false, voidActive: false })
+  const prevFrameRef = useRef({ allFists: false, rasenganActive: false, voidActive: false, ghostPoseActive: false })
   const [mode, setMode] = useState(MODE_TECH)
   const [toast, setToast] = useState('🔥 기술 모드')
   const [error, setError] = useState('')
@@ -151,7 +151,7 @@ function App() {
     rasenganPos: { x: 0, y: 0 },
     rasenganUi: { x: 50, y: 50 },
   })
-  const [ghost, setGhost] = useState({ visible: false, x: 0.5, y: 0.45, vx: 0.003, vy: -0.002, angle: 0 })
+  const [ghost, setGhost] = useState({ visible: false, x: 0.5, y: 0.45, vx: 0.003, vy: -0.002, spawned: false })
   const [blood, setBlood] = useState({ visible: false, x: 0.5, y: 0.5, ttl: 0 })
 
   const vibrate = useCallback((ms = 30) => {
@@ -243,13 +243,31 @@ function App() {
       return
     }
 
-    const sidePose = analyzed.some((h) => h.sidePose)
+    const sidePose = analyzed.some((h) => h.sidePose && !h.fist)
     const fists = analyzed.length >= 2 && analyzed[0].fist && analyzed[1].fist
     const openHands = analyzed.length >= 2 && !analyzed[0].fist && !analyzed[1].fist
     const fingertips = mappedHands.flatMap((h) => [h[JOINTS.THUMB_TIP], h[JOINTS.INDEX_TIP], h[JOINTS.MIDDLE_TIP], h[JOINTS.RING_TIP], h[JOINTS.PINKY_TIP]])
 
-    setGhost((prev) => ({ ...prev, visible: sidePose || prev.visible }))
+    if (sidePose && !prevFrameRef.current.ghostPoseActive) {
+      setGhost((prev) => {
+        if (prev.spawned) return prev
+        const spawnPoint = palms[0] || { x: 0.5, y: 0.45 }
+        fireToast('👻 유령 소환')
+        return {
+          ...prev,
+          visible: true,
+          spawned: true,
+          x: clamp(spawnPoint.x, 0.08, 0.92),
+          y: clamp(spawnPoint.y, 0.08, 0.88),
+          vx: 0.004,
+          vy: -0.003,
+        }
+      })
+    }
+    prevFrameRef.current.ghostPoseActive = sidePose
+
     setGhost((prev) => {
+      if (!prev.visible) return prev
       let x = prev.x + prev.vx
       let y = prev.y + prev.vy + Math.sin(performance.now() * 0.002) * 0.0012
       let vx = prev.vx
@@ -269,7 +287,7 @@ function App() {
         vx += (blood.x - x) * 0.004
         vy += (blood.y - y) * 0.004
       }
-      return { ...prev, x, y, vx: clamp(vx, -0.025, 0.025), vy: clamp(vy, -0.025, 0.025), angle: prev.angle + 1.8 }
+      return { ...prev, x, y, vx: clamp(vx, -0.025, 0.025), vy: clamp(vy, -0.025, 0.025) }
     })
 
     if (prevFrameRef.current.allFists && openHands) {
@@ -453,7 +471,7 @@ function App() {
           onError={(e) => {
             e.currentTarget.style.display = 'none'
           }}
-          style={{ left: `${ghost.x * 100}%`, top: `${ghost.y * 100}%`, transform: `translate(-50%, -50%) rotate(${ghost.angle}deg)` }}
+          style={{ left: `${ghost.x * 100}%`, top: `${ghost.y * 100}%` }}
         />
       ) : null}
       {mode === MODE_GHOST && blood.visible ? (
